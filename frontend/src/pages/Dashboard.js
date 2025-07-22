@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Grid,
   Card,
@@ -12,6 +12,7 @@ import {
   ListItemIcon,
   Divider,
   Chip,
+  Avatar,
 } from '@mui/material';
 import {
   People as PeopleIcon,
@@ -21,69 +22,120 @@ import {
   CheckCircle as CheckCircleIcon,
   Schedule as ScheduleIcon,
 } from '@mui/icons-material';
+import { patientsAPI, drugsAPI, prescriptionsAPI } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Dashboard = () => {
-  const stats = [
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [stats, setStats] = useState([
     {
       title: 'Total Patients',
-      value: '1,247',
+      value: '0',
       icon: <PeopleIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
       color: '#1976d2',
     },
     {
       title: 'Active Prescriptions',
-      value: '89',
+      value: '0',
       icon: <ReceiptIcon sx={{ fontSize: 40, color: 'success.main' }} />,
       color: '#2e7d32',
     },
     {
       title: 'Medications',
-      value: '156',
+      value: '0',
       icon: <MedicationIcon sx={{ fontSize: 40, color: 'info.main' }} />,
       color: '#0288d1',
     },
     {
       title: 'Pending Reviews',
-      value: '12',
+      value: '0',
       icon: <WarningIcon sx={{ fontSize: 40, color: 'warning.main' }} />,
       color: '#ed6c02',
     },
-  ];
+  ]);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const recentActivity = [
-    {
-      id: 1,
-      action: 'New prescription created',
-      patient: 'John Smith',
-      medication: 'Lisinopril 10mg',
-      time: '2 hours ago',
-      status: 'active',
-    },
-    {
-      id: 2,
-      action: 'Prescription renewed',
-      patient: 'Sarah Johnson',
-      medication: 'Metformin 500mg',
-      time: '4 hours ago',
-      status: 'active',
-    },
-    {
-      id: 3,
-      action: 'Medication interaction warning',
-      patient: 'Mike Davis',
-      medication: 'Warfarin 5mg',
-      time: '6 hours ago',
-      status: 'warning',
-    },
-    {
-      id: 4,
-      action: 'Patient consultation completed',
-      patient: 'Emily Wilson',
-      medication: 'Atorvastatin 20mg',
-      time: '1 day ago',
-      status: 'completed',
-    },
-  ];
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [patientsStats, drugsStats, prescriptionsStats, prescriptionsList] = await Promise.all([
+          patientsAPI.getStats(),
+          drugsAPI.getStats(),
+          prescriptionsAPI.getStats(),
+          prescriptionsAPI.getAll({ limit: 5 })
+        ]);
+
+        setStats([
+          {
+            title: 'Total Patients',
+            value: patientsStats.data.total_patients.toString(),
+            icon: <PeopleIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
+            color: '#1976d2',
+          },
+          {
+            title: 'Medications',
+            value: drugsStats.data.total_drugs.toString(),
+            icon: <MedicationIcon sx={{ fontSize: 40, color: 'info.main' }} />,
+            color: '#0288d1',
+          },
+          {
+            title: 'Active Prescriptions',
+            value: prescriptionsStats.data.active_prescriptions.toString(),
+            icon: <ReceiptIcon sx={{ fontSize: 40, color: 'success.main' }} />,
+            color: '#2e7d32',
+          },
+          {
+            title: 'Completed Prescriptions',
+            value: prescriptionsStats.data.completed_prescriptions.toString(),
+            icon: <CheckCircleIcon sx={{ fontSize: 40, color: 'info.main' }} />,
+            color: '#0288d1',
+          },
+          {
+            title: 'Expired Prescriptions',
+            value: prescriptionsStats.data.expired_prescriptions.toString(),
+            icon: <WarningIcon sx={{ fontSize: 40, color: 'error.main' }} />,
+            color: '#ed6c02',
+          },
+          {
+            title: 'Cancelled Prescriptions',
+            value: prescriptionsStats.data.cancelled_prescriptions.toString(),
+            icon: <WarningIcon sx={{ fontSize: 40, color: 'warning.main' }} />,
+            color: '#ed6c02',
+          },
+          {
+            title: 'Pending Prescriptions',
+            value: prescriptionsStats.data.pending_prescriptions.toString(),
+            icon: <ScheduleIcon sx={{ fontSize: 40, color: 'warning.main' }} />,
+            color: '#ed6c02',
+          },
+          {
+            title: 'Total Prescriptions',
+            value: prescriptionsStats.data.total_prescriptions.toString(),
+            icon: <ReceiptIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
+            color: '#1976d2',
+          },
+        ]);
+
+        setRecentActivity(prescriptionsList.data.results || []);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+    // Optionally, clear stats and recentActivity on unmount
+    return () => {
+      setStats([]);
+      setRecentActivity([]);
+    };
+  }, []);
+
+
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -113,6 +165,27 @@ const Dashboard = () => {
 
   return (
     <Box>
+      {/* User Info Section */}
+      {user && (
+        <Card elevation={3} sx={{ maxWidth: 400, mb: 3 }}>
+          <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.main', fontSize: 28 }}>
+              {(user.full_name || user.username || user.email || 'D')[0].toUpperCase()}
+            </Avatar>
+            <Box sx={{ flexGrow: 1 }}>
+              <Typography variant="h6">
+                {user.full_name || user.username || user.email || 'Doctor'}
+              </Typography>
+              {user.email && (
+                <Typography variant="body2" color="text.secondary">{user.email}</Typography>
+              )}
+              {user.role && (
+                <Chip label={user.role.charAt(0).toUpperCase() + user.role.slice(1)} color="primary" size="small" sx={{ mt: 0.5 }} />
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
       <Typography variant="h4" gutterBottom>
         Dashboard
       </Typography>
@@ -147,36 +220,48 @@ const Dashboard = () => {
                 Recent Activity
               </Typography>
               <List>
-                {recentActivity.map((activity, index) => (
-                  <React.Fragment key={activity.id}>
-                    <ListItem alignItems="flex-start">
-                      <ListItemIcon>
-                        {getStatusIcon(activity.status)}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={
-                          <Box display="flex" justifyContent="space-between" alignItems="center">
-                            <Typography variant="body1" fontWeight="medium">
-                              {activity.action}
-                            </Typography>
-                            {getStatusChip(activity.status)}
-                          </Box>
-                        }
-                        secondary={
-                          <React.Fragment>
-                            <Typography component="span" variant="body2" color="text.primary">
-                              {activity.patient} - {activity.medication}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {activity.time}
-                            </Typography>
-                          </React.Fragment>
-                        }
-                      />
-                    </ListItem>
-                    {index < recentActivity.length - 1 && <Divider variant="inset" component="li" />}
-                  </React.Fragment>
-                ))}
+                {recentActivity.length > 0 ? (
+                  recentActivity.map((activity, index) => (
+                    <React.Fragment key={activity.id}>
+                      <ListItem alignItems="flex-start">
+                        <ListItemIcon>
+                          {getStatusIcon(activity.status)}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Box display="flex" justifyContent="space-between" alignItems="center">
+                              <Typography variant="body1" fontWeight="medium">
+                                Prescription for {activity.patient_details?.full_name}
+                              </Typography>
+                              {getStatusChip(activity.status)}
+                            </Box>
+                          }
+                          secondary={
+                            <React.Fragment>
+                              <Typography component="span" variant="body2" color="text.primary">
+                                {activity.drug_details?.name} - {activity.dosage}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {new Date(activity.prescribed_date).toLocaleDateString()}
+                              </Typography>
+                            </React.Fragment>
+                          }
+                        />
+                      </ListItem>
+                      {index < recentActivity.length - 1 && <Divider variant="inset" component="li" />}
+                    </React.Fragment>
+                  ))
+                ) : (
+                  <ListItem>
+                    <ListItemText
+                      primary={
+                        <Typography variant="body2" color="text.secondary">
+                          No recent activity
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                )}
               </List>
             </Box>
           </Paper>
@@ -196,6 +281,7 @@ const Dashboard = () => {
                   variant="outlined"
                   clickable
                   sx={{ justifyContent: 'flex-start', height: 48 }}
+                  onClick={() => navigate('/patients')}
                 />
                 <Chip
                   label="Create Prescription"
@@ -203,6 +289,7 @@ const Dashboard = () => {
                   variant="outlined"
                   clickable
                   sx={{ justifyContent: 'flex-start', height: 48 }}
+                  onClick={() => navigate('/prescriptions')}
                 />
                 <Chip
                   label="Review Interactions"
@@ -210,6 +297,7 @@ const Dashboard = () => {
                   variant="outlined"
                   clickable
                   sx={{ justifyContent: 'flex-start', height: 48 }}
+                  onClick={() => navigate('/medications')}
                 />
                 <Chip
                   label="Generate Reports"
@@ -217,6 +305,7 @@ const Dashboard = () => {
                   variant="outlined"
                   clickable
                   sx={{ justifyContent: 'flex-start', height: 48 }}
+                  onClick={() => navigate('/')}
                 />
               </Box>
             </Box>

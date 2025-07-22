@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -26,6 +26,12 @@ import {
   List,
   ListItem,
   ListItemText,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  OutlinedInput,
+  Checkbox,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -37,93 +43,71 @@ import {
   Category as CategoryIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
+import { drugsAPI } from '../services/api';
+import { allergiesAPI } from '../services/api';
 
 const Medications = () => {
+  const [medications, setMedications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedMedication, setSelectedMedication] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    generic_name: '',
+    strength: '',
+    form: '',
+    category: '',
+    manufacturer: '',
+    dosage_instructions: '',
+    side_effects: '',
+    contraindications: '',
+    interactions: '',
+    availability: 'available',
+  });
+  const [formError, setFormError] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
+  const [allergies, setAllergies] = useState([]);
 
-  // Mock data - in a real app, this would come from an API
-  const medications = [
-    {
-      id: 1,
-      name: 'Lisinopril',
-      genericName: 'Lisinopril',
-      strength: '10mg',
-      form: 'Tablet',
-      category: 'ACE Inhibitor',
-      manufacturer: 'Generic',
-      interactions: ['NSAIDs', 'Lithium', 'Potassium supplements'],
-      sideEffects: ['Dry cough', 'Dizziness', 'Fatigue'],
-      contraindications: ['Pregnancy', 'Angioedema history'],
-      dosage: '10mg once daily',
-      availability: 'Available',
-    },
-    {
-      id: 2,
-      name: 'Metformin',
-      genericName: 'Metformin',
-      strength: '500mg',
-      form: 'Tablet',
-      category: 'Biguanide',
-      manufacturer: 'Generic',
-      interactions: ['Alcohol', 'Warfarin', 'Furosemide'],
-      sideEffects: ['Nausea', 'Diarrhea', 'Stomach upset'],
-      contraindications: ['Kidney disease', 'Metabolic acidosis'],
-      dosage: '500mg twice daily with meals',
-      availability: 'Available',
-    },
-    {
-      id: 3,
-      name: 'Warfarin',
-      genericName: 'Warfarin',
-      strength: '5mg',
-      form: 'Tablet',
-      category: 'Anticoagulant',
-      manufacturer: 'Generic',
-      interactions: ['Aspirin', 'NSAIDs', 'Vitamin K', 'Metformin'],
-      sideEffects: ['Bleeding', 'Bruising', 'Nausea'],
-      contraindications: ['Pregnancy', 'Active bleeding'],
-      dosage: '5mg once daily',
-      availability: 'Available',
-    },
-    {
-      id: 4,
-      name: 'Atorvastatin',
-      genericName: 'Atorvastatin',
-      strength: '20mg',
-      form: 'Tablet',
-      category: 'Statin',
-      manufacturer: 'Generic',
-      interactions: ['Grapefruit juice', 'Cyclosporine', 'Gemfibrozil'],
-      sideEffects: ['Muscle pain', 'Liver problems', 'Headache'],
-      contraindications: ['Liver disease', 'Pregnancy'],
-      dosage: '20mg once daily at bedtime',
-      availability: 'Available',
-    },
-    {
-      id: 5,
-      name: 'Amlodipine',
-      genericName: 'Amlodipine',
-      strength: '5mg',
-      form: 'Tablet',
-      category: 'Calcium Channel Blocker',
-      manufacturer: 'Generic',
-      interactions: ['Simvastatin', 'Digoxin', 'Warfarin'],
-      sideEffects: ['Swelling', 'Dizziness', 'Flushing'],
-      contraindications: ['Severe aortic stenosis', 'Cardiogenic shock'],
-      dosage: '5mg once daily',
-      availability: 'Available',
-    },
-  ];
+  useEffect(() => {
+    fetchMedications();
+    fetchAllergies();
+    // Optionally, clear medications state on unmount
+    return () => setMedications([]);
+  }, []);
 
-  const filteredMedications = medications.filter(medication =>
-    medication.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    medication.genericName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    medication.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const fetchMedications = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await drugsAPI.getAll();
+      setMedications(res.data);
+    } catch (err) {
+      setError('Failed to load medications.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAllergies = async () => {
+    try {
+      const res = await allergiesAPI.getAll();
+      setAllergies(res.data);
+    } catch (err) {
+      setAllergies([]);
+    }
+  };
+
+  const filteredMedications = medications.filter(medication => {
+    return (
+      (medication.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (medication.generic_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (medication.category || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -136,19 +120,74 @@ const Medications = () => {
 
   const handleOpenDialog = (medication = null) => {
     setSelectedMedication(medication);
+    if (medication) {
+      setFormData({
+        name: medication.name || '',
+        generic_name: medication.generic_name || '',
+        strength: medication.strength || '',
+        form: medication.form || '',
+        category: medication.category || '',
+        manufacturer: medication.manufacturer || '',
+        dosage_instructions: medication.dosage_instructions || '',
+        side_effects: medication.side_effects || '',
+        contraindications: medication.contraindications || '',
+        interactions: medication.interactions || '',
+        availability: medication.availability || 'available',
+      });
+    } else {
+      setFormData({
+        name: '',
+        generic_name: '',
+        strength: '',
+        form: '',
+        category: '',
+        manufacturer: '',
+        dosage_instructions: '',
+        side_effects: '',
+        contraindications: '',
+        interactions: '',
+        availability: 'available',
+      });
+    }
+    setFormError('');
     setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setSelectedMedication(null);
+    setFormError('');
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    setFormError('');
+  };
+
+  const handleAllergyConflictsChange = (event) => {
+    setFormData({ ...formData, allergy_conflicts: event.target.value });
+  };
+
+  const handleFormSubmit = async () => {
+    setFormLoading(true);
+    setFormError('');
+    try {
+      await drugsAPI.create({ ...formData, allergy_conflicts: formData.allergy_conflicts || [] });
+      fetchMedications();
+      handleCloseDialog();
+    } catch (err) {
+      setFormError('Failed to save medication.');
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const getAvailabilityChip = (availability) => {
     return (
       <Chip
-        label={availability}
-        color={availability === 'Available' ? 'success' : 'error'}
+        label={availability === 'available' ? 'Available' : availability === 'out_of_stock' ? 'Out of Stock' : 'Discontinued'}
+        color={availability === 'available' ? 'success' : 'error'}
         size="small"
       />
     );
@@ -208,66 +247,83 @@ const Medications = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredMedications
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((medication) => (
-                    <TableRow key={medication.id} hover>
-                      <TableCell>
-                        <Typography variant="body1" fontWeight="medium">
-                          {medication.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{medication.genericName}</TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="medium">
-                            {medication.strength}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {medication.form}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={medication.category}
-                          size="small"
-                          icon={<CategoryIcon />}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {medication.interactions.length > 0 ? (
-                          <Chip
-                            label={`${medication.interactions.length} interactions`}
-                            color="warning"
-                            size="small"
-                            icon={<WarningIcon />}
-                          />
-                        ) : (
-                          <Chip label="None" size="small" color="success" />
-                        )}
-                      </TableCell>
-                      <TableCell>{getAvailabilityChip(medication.availability)}</TableCell>
-                      <TableCell>
-                        <Box display="flex" gap={1}>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleOpenDialog(medication)}
-                          >
-                            <ViewIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleOpenDialog(medication)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">Loading...</TableCell>
+                  </TableRow>
+                ) : error ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center" style={{ color: 'red' }}>{error}</TableCell>
+                  </TableRow>
+                ) : filteredMedications.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">No medications found.</TableCell>
+                  </TableRow>
+                ) : (
+                  filteredMedications
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((medication) => {
+                      const interactions = (medication.interactions || '').split(',').map(s => s.trim()).filter(Boolean);
+                      return (
+                        <TableRow key={medication.id} hover>
+                          <TableCell>
+                            <Typography variant="body1" fontWeight="medium">
+                              {medication.name}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{medication.generic_name}</TableCell>
+                          <TableCell>
+                            <Box>
+                              <Typography variant="body2" fontWeight="medium">
+                                {medication.strength}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {medication.form}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={medication.category}
+                              size="small"
+                              icon={<CategoryIcon />}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {interactions.length > 0 ? (
+                              <Chip
+                                label={`${interactions.length} interactions`}
+                                color="warning"
+                                size="small"
+                                icon={<WarningIcon />}
+                              />
+                            ) : (
+                              <Chip label="None" size="small" color="success" />
+                            )}
+                          </TableCell>
+                          <TableCell>{getAvailabilityChip(medication.availability)}</TableCell>
+                          <TableCell>
+                            <Box display="flex" gap={1}>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => handleOpenDialog(medication)}
+                              >
+                                <ViewIcon />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => handleOpenDialog(medication)}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -297,7 +353,7 @@ const Medications = () => {
                   <TextField
                     fullWidth
                     label="Medication Name"
-                    defaultValue={selectedMedication.name}
+                    value={selectedMedication.name}
                     InputProps={{ readOnly: true }}
                   />
                 </Grid>
@@ -305,7 +361,7 @@ const Medications = () => {
                   <TextField
                     fullWidth
                     label="Generic Name"
-                    defaultValue={selectedMedication.genericName}
+                    value={selectedMedication.generic_name}
                     InputProps={{ readOnly: true }}
                   />
                 </Grid>
@@ -313,7 +369,7 @@ const Medications = () => {
                   <TextField
                     fullWidth
                     label="Strength"
-                    defaultValue={selectedMedication.strength}
+                    value={selectedMedication.strength}
                     InputProps={{ readOnly: true }}
                   />
                 </Grid>
@@ -321,7 +377,7 @@ const Medications = () => {
                   <TextField
                     fullWidth
                     label="Form"
-                    defaultValue={selectedMedication.form}
+                    value={selectedMedication.form}
                     InputProps={{ readOnly: true }}
                   />
                 </Grid>
@@ -329,7 +385,7 @@ const Medications = () => {
                   <TextField
                     fullWidth
                     label="Category"
-                    defaultValue={selectedMedication.category}
+                    value={selectedMedication.category}
                     InputProps={{ readOnly: true }}
                   />
                 </Grid>
@@ -337,7 +393,7 @@ const Medications = () => {
                   <TextField
                     fullWidth
                     label="Manufacturer"
-                    defaultValue={selectedMedication.manufacturer}
+                    value={selectedMedication.manufacturer}
                     InputProps={{ readOnly: true }}
                   />
                 </Grid>
@@ -345,60 +401,57 @@ const Medications = () => {
                   <TextField
                     fullWidth
                     label="Dosage"
-                    defaultValue={selectedMedication.dosage}
+                    value={selectedMedication.dosage_instructions}
                     InputProps={{ readOnly: true }}
                   />
                 </Grid>
               </Grid>
-
               <Accordion sx={{ mt: 2 }}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6" color="warning.main">
                     <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Drug Interactions ({selectedMedication.interactions.length})
+                    Drug Interactions ({(selectedMedication.interactions || '').split(',').filter(Boolean).length})
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <List dense>
-                    {selectedMedication.interactions.map((interaction, index) => (
+                    {(selectedMedication.interactions || '').split(',').map((interaction, index) => (
                       <ListItem key={index}>
-                        <ListItemText primary={interaction} />
+                        <ListItemText primary={interaction.trim()} />
                       </ListItem>
                     ))}
                   </List>
                 </AccordionDetails>
               </Accordion>
-
               <Accordion>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6" color="error.main">
                     <InfoIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Side Effects ({selectedMedication.sideEffects.length})
+                    Side Effects ({(selectedMedication.side_effects || '').split(',').filter(Boolean).length})
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <List dense>
-                    {selectedMedication.sideEffects.map((effect, index) => (
+                    {(selectedMedication.side_effects || '').split(',').map((effect, index) => (
                       <ListItem key={index}>
-                        <ListItemText primary={effect} />
+                        <ListItemText primary={effect.trim()} />
                       </ListItem>
                     ))}
                   </List>
                 </AccordionDetails>
               </Accordion>
-
               <Accordion>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography variant="h6" color="error.main">
                     <InfoIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Contraindications ({selectedMedication.contraindications.length})
+                    Contraindications ({(selectedMedication.contraindications || '').split(',').filter(Boolean).length})
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <List dense>
-                    {selectedMedication.contraindications.map((contraindication, index) => (
+                    {(selectedMedication.contraindications || '').split(',').map((contraindication, index) => (
                       <ListItem key={index}>
-                        <ListItemText primary={contraindication} />
+                        <ListItemText primary={contraindication.trim()} />
                       </ListItem>
                     ))}
                   </List>
@@ -411,6 +464,9 @@ const Medications = () => {
                 <TextField
                   fullWidth
                   label="Medication Name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleFormChange}
                   placeholder="Enter medication name"
                 />
               </Grid>
@@ -418,6 +474,9 @@ const Medications = () => {
                 <TextField
                   fullWidth
                   label="Generic Name"
+                  name="generic_name"
+                  value={formData.generic_name}
+                  onChange={handleFormChange}
                   placeholder="Enter generic name"
                 />
               </Grid>
@@ -425,6 +484,9 @@ const Medications = () => {
                 <TextField
                   fullWidth
                   label="Strength"
+                  name="strength"
+                  value={formData.strength}
+                  onChange={handleFormChange}
                   placeholder="e.g., 10mg"
                 />
               </Grid>
@@ -432,6 +494,9 @@ const Medications = () => {
                 <TextField
                   fullWidth
                   label="Form"
+                  name="form"
+                  value={formData.form}
+                  onChange={handleFormChange}
                   placeholder="e.g., Tablet, Capsule"
                 />
               </Grid>
@@ -439,6 +504,9 @@ const Medications = () => {
                 <TextField
                   fullWidth
                   label="Category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleFormChange}
                   placeholder="e.g., ACE Inhibitor"
                 />
               </Grid>
@@ -446,6 +514,9 @@ const Medications = () => {
                 <TextField
                   fullWidth
                   label="Manufacturer"
+                  name="manufacturer"
+                  value={formData.manufacturer}
+                  onChange={handleFormChange}
                   placeholder="Enter manufacturer"
                 />
               </Grid>
@@ -453,18 +524,88 @@ const Medications = () => {
                 <TextField
                   fullWidth
                   label="Dosage Instructions"
+                  name="dosage_instructions"
+                  value={formData.dosage_instructions}
+                  onChange={handleFormChange}
                   multiline
                   rows={3}
                   placeholder="Enter dosage instructions..."
                 />
               </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  label="Side Effects (comma separated)"
+                  name="side_effects"
+                  value={formData.side_effects}
+                  onChange={handleFormChange}
+                  placeholder="e.g., Nausea, Dizziness"
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  label="Contraindications (comma separated)"
+                  name="contraindications"
+                  value={formData.contraindications}
+                  onChange={handleFormChange}
+                  placeholder="e.g., Pregnancy, Liver disease"
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  label="Interactions (comma separated)"
+                  name="interactions"
+                  value={formData.interactions}
+                  onChange={handleFormChange}
+                  placeholder="e.g., Warfarin, NSAIDs"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth
+                  label="Availability"
+                  name="availability"
+                  value={formData.availability}
+                  onChange={handleFormChange}
+                  placeholder="available, out_of_stock, discontinued"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Allergy Conflicts</InputLabel>
+                  <Select
+                    label="Allergy Conflicts"
+                    multiple
+                    value={formData.allergy_conflicts || []}
+                    onChange={handleAllergyConflictsChange}
+                    input={<OutlinedInput label="Allergy Conflicts" />}
+                    renderValue={(selected) =>
+                      allergies.filter(a => selected.includes(a.id)).map(a => a.name).join(', ')
+                    }
+                  >
+                    {allergies.map((allergy) => (
+                      <MenuItem key={allergy.id} value={allergy.id}>
+                        <Checkbox checked={(formData.allergy_conflicts || []).includes(allergy.id)} />
+                        <ListItemText primary={allergy.name} />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              {formError && (
+                <Grid item xs={12}>
+                  <Typography color="error">{formError}</Typography>
+                </Grid>
+              )}
             </Grid>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Close</Button>
           {!selectedMedication && (
-            <Button variant="contained" onClick={handleCloseDialog}>
+            <Button variant="contained" onClick={handleFormSubmit} disabled={formLoading}>
               Add Medication
             </Button>
           )}

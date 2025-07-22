@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
+import { authAPI } from '../services/api';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -28,23 +29,23 @@ const Login = () => {
     setError('');
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Attempting login with:', { username: formData.email, password: formData.password });
       
-      // For demo purposes, accept any email/password
-      if (formData.email && formData.password) {
-        const userData = {
-          email: formData.email,
-          name: 'Demo User',
-          role: 'doctor'
-        };
-        login(userData);
-        navigate('/');
-      } else {
-        setError('Please fill in all fields');
-      }
+      const response = await authAPI.login({
+        username: formData.email,
+        password: formData.password
+      });
+      
+      console.log('Login response:', response.data);
+      
+      const { access, user } = response.data;
+      localStorage.setItem('authToken', access);
+      login(user);
+      console.log('User logged in, navigating to dashboard');
+      navigate('/');
     } catch (err) {
-      setError('Login failed. Please try again.');
+      console.error('Login error:', err);
+      setError(err.response?.data?.detail || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

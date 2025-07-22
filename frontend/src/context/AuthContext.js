@@ -32,15 +32,18 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = (userData) => {
+    console.log('AuthContext: Setting user data:', userData);
     setUser(userData);
-    localStorage.setItem('authToken', 'demo-token');
     localStorage.setItem('user', JSON.stringify(userData));
+    console.log('AuthContext: User data saved to localStorage');
   };
 
   const logout = () => {
     setUser(null);
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
+    // Optionally clear any other cached data here (e.g., localStorage.removeItem('patients'), etc.)
+    window.location.href = '/login'; // Force redirect to login
   };
 
   const value = {

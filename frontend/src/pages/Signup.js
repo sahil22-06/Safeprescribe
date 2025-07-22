@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
+import { authAPI } from '../services/api';
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -63,20 +64,29 @@ const Signup = () => {
     setError('');
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // For demo purposes, create account successfully
-      const userData = {
+      const response = await authAPI.register({
+        username: formData.email,
         email: formData.email,
-        name: `${formData.firstName} ${formData.lastName}`,
+        password: formData.password,
+        confirm_password: formData.confirmPassword,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
         role: formData.role,
-        licenseNumber: formData.licenseNumber
-      };
-      login(userData);
+        license_number: formData.licenseNumber
+      });
+      
+      // Auto-login after successful registration
+      const loginResponse = await authAPI.login({
+        username: formData.email,
+        password: formData.password
+      });
+      
+      const { access, user } = loginResponse.data;
+      localStorage.setItem('authToken', access);
+      login(user);
       navigate('/');
     } catch (err) {
-      setError('Signup failed. Please try again.');
+      setError(err.response?.data?.detail || 'Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

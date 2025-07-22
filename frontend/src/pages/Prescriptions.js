@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -37,82 +37,102 @@ import {
   CheckCircle as CheckCircleIcon,
   Schedule as ScheduleIcon,
 } from '@mui/icons-material';
+import { prescriptionsAPI, patientsAPI, drugsAPI } from '../services/api';
+
+function toISODate(dateStr) {
+  // Accepts YYYY-MM-DD or DD-MM-YYYY, returns YYYY-MM-DD
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+    const [d, m, y] = dateStr.split('-');
+    return `${y}-${m}-${d}`;
+  }
+  return dateStr;
+}
 
 const Prescriptions = () => {
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [drugs, setDrugs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedPrescription, setSelectedPrescription] = useState(null);
+  const [formData, setFormData] = useState({
+    patient: '',
+    drug: '',
+    dosage: '',
+    frequency: '',
+    duration: '',
+    quantity: '',
+    refills: '',
+    instructions: '',
+    prescribed_date: '',
+    expiry_date: '',
+    status: 'active',
+  });
+  const [formError, setFormError] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
+  const [allergyWarning, setAllergyWarning] = useState('');
 
-  // Mock data - in a real app, this would come from an API
-  const prescriptions = [
-    {
-      id: 1,
-      patientName: 'John Smith',
-      medication: 'Lisinopril 10mg',
-      dosage: '1 tablet daily',
-      quantity: 30,
-      refills: 3,
-      prescribedDate: '2024-01-15',
-      expiryDate: '2024-04-15',
-      status: 'Active',
-      interactions: [],
-    },
-    {
-      id: 2,
-      patientName: 'Sarah Johnson',
-      medication: 'Metformin 500mg',
-      dosage: '1 tablet twice daily',
-      quantity: 60,
-      refills: 2,
-      prescribedDate: '2024-01-10',
-      expiryDate: '2024-03-10',
-      status: 'Active',
-      interactions: ['Warfarin'],
-    },
-    {
-      id: 3,
-      patientName: 'Mike Davis',
-      medication: 'Warfarin 5mg',
-      dosage: '1 tablet daily',
-      quantity: 30,
-      refills: 1,
-      prescribedDate: '2024-01-08',
-      expiryDate: '2024-02-08',
-      status: 'Pending Review',
-      interactions: ['Metformin', 'Aspirin'],
-    },
-    {
-      id: 4,
-      patientName: 'Emily Wilson',
-      medication: 'Atorvastatin 20mg',
-      dosage: '1 tablet at bedtime',
-      quantity: 30,
-      refills: 4,
-      prescribedDate: '2024-01-12',
-      expiryDate: '2024-04-12',
-      status: 'Active',
-      interactions: [],
-    },
-    {
-      id: 5,
-      patientName: 'Robert Brown',
-      medication: 'Amlodipine 5mg',
-      dosage: '1 tablet daily',
-      quantity: 30,
-      refills: 2,
-      prescribedDate: '2024-01-05',
-      expiryDate: '2024-03-05',
-      status: 'Expired',
-      interactions: [],
-    },
-  ];
+  useEffect(() => {
+    fetchAll();
+    // Optionally, clear prescriptions state on unmount
+    return () => setPrescriptions([]);
+  }, []);
 
-  const filteredPrescriptions = prescriptions.filter(prescription =>
-    prescription.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    prescription.medication.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    if (!formData.patient || !formData.drug) {
+      setAllergyWarning('');
+      return;
+    }
+    const patient = patients.find((p) => p.id === Number(formData.patient));
+    const drug = drugs.find((d) => d.id === Number(formData.drug));
+    if (patient && drug && patient.allergies && drug.allergy_conflicts) {
+      const patientAllergyIds = patient.allergies.map((a) => a.id);
+      const conflictAllergies = drug.allergy_conflicts.filter((a) => patientAllergyIds.includes(a.id));
+      if (conflictAllergies.length > 0) {
+        setAllergyWarning(
+          `Warning: Patient is allergic to: ${conflictAllergies.map((a) => a.name).join(', ')}. This drug may cause an allergic reaction.`
+        );
+      } else {
+        setAllergyWarning('');
+      }
+    } else {
+      setAllergyWarning('');
+    }
+  }, [formData.patient, formData.drug, patients, drugs]);
+
+  const fetchAll = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [presRes, patRes, drugRes] = await Promise.all([
+        prescriptionsAPI.getAll(),
+        patientsAPI.getAll(),
+        drugsAPI.getAll(),
+      ]);
+      setPrescriptions(presRes.data);
+      setPatients(patRes.data);
+      setDrugs(drugRes.data);
+    } catch (err) {
+      setError('Failed to load prescriptions or reference data.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredPrescriptions = prescriptions.filter(prescription => {
+    const patientName = prescription.patient_details ? `${prescription.patient_details.first_name} ${prescription.patient_details.last_name}`.toLowerCase() : '';
+    const drugName = prescription.drug_details ? prescription.drug_details.name.toLowerCase() : '';
+    return (
+      patientName.includes(searchTerm.toLowerCase()) ||
+      drugName.includes(searchTerm.toLowerCase())
+    );
+  });
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -125,26 +145,121 @@ const Prescriptions = () => {
 
   const handleOpenDialog = (prescription = null) => {
     setSelectedPrescription(prescription);
+    if (prescription) {
+      setFormData({
+        patient: prescription.patient,
+        drug: prescription.drug,
+        dosage: prescription.dosage,
+        frequency: prescription.frequency,
+        duration: prescription.duration,
+        quantity: prescription.quantity,
+        refills: prescription.refills,
+        instructions: prescription.instructions,
+        prescribed_date: prescription.prescribed_date,
+        expiry_date: prescription.expiry_date,
+        status: prescription.status,
+      });
+    } else {
+      setFormData({
+        patient: '',
+        drug: '',
+        dosage: '',
+        frequency: '',
+        duration: '',
+        quantity: '',
+        refills: '',
+        instructions: '',
+        prescribed_date: '',
+        expiry_date: '',
+        status: 'active',
+      });
+    }
+    setFormError('');
+    setAllergyWarning('');
     setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setSelectedPrescription(null);
+    setFormError('');
+  };
+
+  const handleFormChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormError('');
+  };
+
+  const handleFormSubmit = async () => {
+    setFormLoading(true);
+    setFormError('');
+    setAllergyWarning('');
+    // Frontend validation
+    const requiredFields = ['patient', 'drug', 'dosage', 'frequency', 'duration', 'quantity', 'refills', 'prescribed_date', 'expiry_date', 'status'];
+    for (const field of requiredFields) {
+      if (!formData[field]) {
+        setFormError(`Please fill in the ${field.replace('_', ' ')} field.`);
+        setFormLoading(false);
+        return;
+      }
+    }
+    // Validate date format
+    const prescribedDate = toISODate(formData.prescribed_date);
+    const expiryDate = toISODate(formData.expiry_date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(prescribedDate) || !/^\d{4}-\d{2}-\d{2}$/.test(expiryDate)) {
+      setFormError('Dates must be in YYYY-MM-DD format.');
+      setFormLoading(false);
+      return;
+    }
+    try {
+      const payload = {
+        ...formData,
+        prescribed_date: prescribedDate,
+        expiry_date: expiryDate,
+        patient: Number(formData.patient),
+        drug: Number(formData.drug),
+        status: formData.status.toLowerCase(),
+      };
+      let response;
+      if (selectedPrescription) {
+        response = await prescriptionsAPI.update(selectedPrescription.id, payload);
+      } else {
+        response = await prescriptionsAPI.create(payload);
+      }
+      // Show backend warning if present
+      if (response && response.data && response.data.allergy_warning) {
+        setAllergyWarning(response.data.allergy_warning);
+      } else {
+        setAllergyWarning('');
+      }
+      fetchAll();
+      handleCloseDialog();
+    } catch (err) {
+      if (err.response && err.response.data) {
+        const messages = Object.entries(err.response.data)
+          .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
+          .join(' ');
+        setFormError(messages || 'Failed to save prescription.');
+      } else {
+        setFormError('Failed to save prescription.');
+      }
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const getStatusChip = (status) => {
     const statusConfig = {
-      'Active': { color: 'success', icon: <CheckCircleIcon /> },
-      'Pending Review': { color: 'warning', icon: <ScheduleIcon /> },
-      'Expired': { color: 'error', icon: <WarningIcon /> },
+      'active': { color: 'success', icon: <CheckCircleIcon /> },
+      'pending': { color: 'warning', icon: <ScheduleIcon /> },
+      'expired': { color: 'error', icon: <WarningIcon /> },
+      'completed': { color: 'default', icon: <CheckCircleIcon /> },
+      'cancelled': { color: 'default', icon: <CheckCircleIcon /> },
     };
-
     const config = statusConfig[status] || { color: 'default', icon: <CheckCircleIcon /> };
-
     return (
       <Chip
-        label={status}
+        label={status.charAt(0).toUpperCase() + status.slice(1)}
         color={config.color}
         size="small"
         icon={config.icon}
@@ -209,55 +324,61 @@ const Prescriptions = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredPrescriptions
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((prescription) => (
-                    <TableRow key={prescription.id} hover>
-                      <TableCell>
-                        <Typography variant="body1" fontWeight="medium">
-                          {prescription.patientName}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center">Loading...</TableCell>
+                  </TableRow>
+                ) : error ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center" style={{ color: 'red' }}>{error}</TableCell>
+                  </TableRow>
+                ) : filteredPrescriptions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center">No prescriptions found.</TableCell>
+                  </TableRow>
+                ) : (
+                  filteredPrescriptions
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((prescription) => (
+                      <TableRow key={prescription.id} hover>
+                        <TableCell>
                           <Typography variant="body1" fontWeight="medium">
-                            {prescription.medication}
+                            {prescription.patient_details ? `${prescription.patient_details.first_name} ${prescription.patient_details.last_name}` : ''}
                           </Typography>
-                          {prescription.interactions.length > 0 && (
-                            <Chip
-                              label={`${prescription.interactions.length} interactions`}
-                              color="warning"
+                        </TableCell>
+                        <TableCell>
+                          <Box>
+                            <Typography variant="body1" fontWeight="medium">
+                              {prescription.drug_details ? prescription.drug_details.name : ''}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>{prescription.dosage}</TableCell>
+                        <TableCell>{prescription.quantity}</TableCell>
+                        <TableCell>{prescription.refills}</TableCell>
+                        <TableCell>{prescription.prescribed_date}</TableCell>
+                        <TableCell>{getStatusChip(prescription.status)}</TableCell>
+                        <TableCell>
+                          <Box display="flex" gap={1}>
+                            <IconButton
                               size="small"
-                              sx={{ mt: 0.5 }}
-                            />
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{prescription.dosage}</TableCell>
-                      <TableCell>{prescription.quantity}</TableCell>
-                      <TableCell>{prescription.refills}</TableCell>
-                      <TableCell>{prescription.prescribedDate}</TableCell>
-                      <TableCell>{getStatusChip(prescription.status)}</TableCell>
-                      <TableCell>
-                        <Box display="flex" gap={1}>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleOpenDialog(prescription)}
-                          >
-                            <ViewIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => handleOpenDialog(prescription)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                              color="primary"
+                              onClick={() => handleOpenDialog(prescription)}
+                            >
+                              <ViewIcon />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleOpenDialog(prescription)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -286,83 +407,167 @@ const Prescriptions = () => {
                 <InputLabel>Patient</InputLabel>
                 <Select
                   label="Patient"
-                  defaultValue={selectedPrescription?.patientName || ''}
+                  name="patient"
+                  value={formData.patient}
+                  onChange={handleFormChange}
                 >
-                  <MenuItem value="John Smith">John Smith</MenuItem>
-                  <MenuItem value="Sarah Johnson">Sarah Johnson</MenuItem>
-                  <MenuItem value="Mike Davis">Mike Davis</MenuItem>
-                  <MenuItem value="Emily Wilson">Emily Wilson</MenuItem>
-                  <MenuItem value="Robert Brown">Robert Brown</MenuItem>
+                  {patients.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {p.first_name} {p.last_name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Medication</InputLabel>
+                <Select
+                  label="Medication"
+                  name="drug"
+                  value={formData.drug}
+                  onChange={handleFormChange}
+                >
+                  {drugs.map((d) => (
+                    <MenuItem key={d.id} value={d.id}>
+                      {d.name}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Medication"
-                defaultValue={selectedPrescription?.medication || ''}
+                label="Dosage"
+                name="dosage"
+                value={formData.dosage}
+                onChange={handleFormChange}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
-                label="Dosage"
-                defaultValue={selectedPrescription?.dosage || ''}
+                label="Frequency"
+                name="frequency"
+                value={formData.frequency}
+                onChange={handleFormChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Duration"
+                name="duration"
+                value={formData.duration}
+                onChange={handleFormChange}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Quantity"
+                name="quantity"
                 type="number"
-                defaultValue={selectedPrescription?.quantity || ''}
+                value={formData.quantity}
+                onChange={handleFormChange}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Refills"
+                name="refills"
                 type="number"
-                defaultValue={selectedPrescription?.refills || ''}
+                value={formData.refills}
+                onChange={handleFormChange}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 fullWidth
                 label="Prescribed Date"
+                name="prescribed_date"
                 type="date"
-                defaultValue={selectedPrescription?.prescribedDate || ''}
+                value={formData.prescribed_date}
+                onChange={handleFormChange}
                 InputLabelProps={{ shrink: true }}
               />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Expiry Date"
+                name="expiry_date"
+                type="date"
+                value={formData.expiry_date}
+                onChange={handleFormChange}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  label="Status"
+                  name="status"
+                  value={formData.status}
+                  onChange={handleFormChange}
+                >
+                  <MenuItem value="active">Active</MenuItem>
+                  <MenuItem value="completed">Completed</MenuItem>
+                  <MenuItem value="cancelled">Cancelled</MenuItem>
+                  <MenuItem value="expired">Expired</MenuItem>
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
                 label="Instructions"
+                name="instructions"
+                value={formData.instructions}
+                onChange={handleFormChange}
                 multiline
                 rows={3}
                 placeholder="Special instructions for the patient..."
               />
             </Grid>
+            {allergyWarning && (
+              <Grid item xs={12}>
+                <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
+                  {allergyWarning}
+                </Alert>
+              </Grid>
+            )}
+            {formError && (
+              <Grid item xs={12}>
+                <Typography color="error">{formError}</Typography>
+              </Grid>
+            )}
+            {formData.patient && (() => {
+              const patient = patients.find((p) => p.id === Number(formData.patient));
+              if (patient && patient.detailed_allergies && patient.detailed_allergies.length > 0) {
+                return (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle1">Patient Allergies</Typography>
+                    {patient.detailed_allergies.map((a) => (
+                      <Alert key={a.id} severity="warning" sx={{ mb: 1 }}>
+                        <strong>{a.allergy?.name || 'Unknown'}</strong>
+                        {a.reaction ? ` — ${a.reaction}` : ''}
+                        {a.date_noted ? ` (Noted: ${a.date_noted})` : ''}
+                      </Alert>
+                    ))}
+                  </Box>
+                );
+              }
+              return null;
+            })()}
           </Grid>
-
-          {selectedPrescription && selectedPrescription.interactions.length > 0 && (
-            <Card sx={{ mt: 2, bgcolor: 'warning.light' }}>
-              <CardContent>
-                <Typography variant="h6" color="warning.dark" gutterBottom>
-                  <WarningIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                  Drug Interactions
-                </Typography>
-                <Typography variant="body2" color="warning.dark">
-                  This medication may interact with: {selectedPrescription.interactions.join(', ')}
-                </Typography>
-              </CardContent>
-            </Card>
-          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button variant="contained" onClick={handleCloseDialog}>
+          <Button variant="contained" onClick={handleFormSubmit} disabled={formLoading}>
             {selectedPrescription ? 'Update' : 'Create'} Prescription
           </Button>
         </DialogActions>

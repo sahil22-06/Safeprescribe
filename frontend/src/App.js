@@ -12,6 +12,7 @@ import Prescriptions from './pages/Prescriptions';
 import Medications from './pages/Medications';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import PatientProfile from './pages/PatientProfile';
 import './App.css';
 
 const theme = createTheme({
@@ -79,6 +80,16 @@ function App() {
                   <Navbar />
                   <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
                     <Medications />
+                  </Box>
+                </Box>
+              </ProtectedRoute>
+            } />
+            <Route path="/patients/:id" element={
+              <ProtectedRoute>
+                <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+                  <Navbar />
+                  <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+                    <PatientProfile />
                   </Box>
                 </Box>
               </ProtectedRoute>
